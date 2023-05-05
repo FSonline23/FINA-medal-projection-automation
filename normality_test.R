@@ -10,7 +10,8 @@ library(optparse)
 conflicts_prefer(dplyr::filter)
 
 option_list = list(
-  make_option(c("-f", "--file"), type = "character", default = NULL, help = "target excel file name", metavar = "character")
+  make_option(c("-f", "--file"), type = "character", default = NULL, help = "target excel file name", metavar = "character"),
+  make_option(c("-c", "--compileOutput"), action = "store_true", default = NULL, help = "Compile output into Completed folder with its respective subfolder")
 );
 
 opt_parser = OptionParser(option_list = option_list);
@@ -29,6 +30,7 @@ if (is.null(opt$file)) {
   targetFile = opt$file
 }
 
+
 # Read Excel from filepath and assign to dataframe object variables
 filePath <- targetFile
 print(paste("Target Excel file is:", filePath))
@@ -37,11 +39,13 @@ swiming_data_2022to2023 <- read_excel(filePath, sheet = "Competitors 2022-2023")
 swiming_data_2023 <- read_excel(filePath, sheet = "Competitors 2023")
 print("Commencing automated normality tests on data...")
 
+
 # Create 2 Empty DataFrames, 1 with columns (Shapiro Wilk test) and 1 for compiling the different datasets used
 columns = c("Name", "Shapiro-Wilks_p-value", "Dataset_Used", "Total_Datapoints", "Datapoints_Used", "Remarks")
 df_shapiroTestResults = data.frame(matrix(nrow = 0, ncol = length(columns)))
 colnames(df_shapiroTestResults) = columns
 df_results = data.frame()
+
 
 # Filter Unqiue Swimmers, Loop through each swimmer and perform Shapiro Wilk's Test
 UniqueSwimmers <- unique(swiming_data_2019to2023$full_name_computed)
@@ -75,7 +79,6 @@ for (i in 1:length(UniqueSwimmers)) {
 
     # Append swimmer normality result to dataframe
     df_shapiroTestResults[nrow(df_shapiroTestResults) + 1,] = c(UniqueSwimmers[i], "NA", dataset_used, nrow(results), top50pctResultsRows, remarks)
-    # print(paste("Final Shapiro wilk p-value: NA. Dataset Used:", dataset_used))
 
     # Append swimmer dataset to dataframe
     df_results = rbind(df_results, Swimmer)
@@ -84,32 +87,26 @@ for (i in 1:length(UniqueSwimmers)) {
 
   #Swimmer$swim_time <- period_to_seconds(ms(Swimmer$swim_time))
   shap_test = shapiro.test(Swimmer$swim_time)
-  print(dataset_used)
-  print(shap_test$p.value)
 
   # Conditional Checks for Shapiro Wilk Normality test of Dataframe Object. If less than 0.05, escalate to next dataset.
   if (shap_test$p.value < 0.05 && dataset_used != "2019-2023") {
     dataset_used <- "2022-2023"
     remarks <- paste("Shapiro Wilk not normal for 2023 (p-value = ", shap_test$p.value, ")")
-    # print("Shapiro-wilk test lesser than 0.05, trying 2022 to 2023 dataset")
     results <- filter(swiming_data_2022to2023, full_name_computed == UniqueSwimmers[i])
     top50pctResultsRows <- ceiling(nrow(results) / 2)
     Swimmer <- head(filter(swiming_data_2022to2023, full_name_computed == UniqueSwimmers[i]), top50pctResultsRows)
     #Swimmer$swim_time <- period_to_seconds(ms(Swimmer$swim_time))
     shap_test = shapiro.test(Swimmer$swim_time)
-    # print(shap_test$p.value)
   }
 
   if (shap_test$p.value < 0.05) {
     dataset_used <- "2019-2023"
     remarks <- paste("Shapiro Wilk not normal for 2022-2023 (p-value = ", shap_test$p.value, ")")
-    # print("Shapiro-wilk test lesser than 0.05, trying 2019 to 2023 dataset")
     results <- filter(swiming_data_2019to2023, full_name_computed == UniqueSwimmers[i])
     top50pctResultsRows <- ceiling(nrow(results) / 2)
     Swimmer <- head(filter(swiming_data_2019to2023, full_name_computed == UniqueSwimmers[i]), top50pctResultsRows)
     #Swimmer$swim_time <- period_to_seconds(ms(Swimmer$swim_time))
     shap_test = shapiro.test(Swimmer$swim_time)
-    # print(shap_test$p.value)
   }
 
   if (shap_test$p.value < 0.05) {
@@ -124,10 +121,11 @@ for (i in 1:length(UniqueSwimmers)) {
   df_results = rbind(df_results, Swimmer)
 }
 
-# print(df_shapiroTestResults)
 
+# Write output
 write.csv(df_shapiroTestResults, "shapiroTest.csv", row.names = FALSE)
 write.csv(df_results, "dataset.csv", row.names = FALSE)
+
 
 # Move Files function
 my.file.rename <- function(from, to) {
@@ -138,17 +136,19 @@ my.file.rename <- function(from, to) {
 
 
 # Move Files to Completed and create subfolder based on target excel file name
-print(paste("Moving Files to './Completed/", substr(filePath, 1, nchar(filePath) - 5), "'...", sep = ""))
-if (!file.exists("./Completed")) {
-  dir.create("./Completed")
-}
-file.copy(from = "./shapiroTest.csv", to = paste("./Completed/", substr(filePath, 1, nchar(filePath) - 5), " shapiroTest.csv", sep = ""))
-my.file.rename(from = "./shapiroTest.csv",
+if (!is.null(opt$compileOutput)) {
+  print(paste("Moving Files to './Completed/", substr(filePath, 1, nchar(filePath) - 5), "'...", sep = ""))
+  if (!file.exists("./Completed")) {
+    dir.create("./Completed")
+  }
+  file.copy(from = "./shapiroTest.csv", to = paste("./Completed/", substr(filePath, 1, nchar(filePath) - 5), " shapiroTest.csv", sep = ""))
+  my.file.rename(from = "./shapiroTest.csv",
                to = paste("./Completed/", substr(filePath, 1, nchar(filePath) - 5), "/shapiroTest.csv", sep = ""))
-my.file.rename(from = "./dataset.csv",
+  my.file.rename(from = "./dataset.csv",
                to = paste("./Completed/", substr(filePath, 1, nchar(filePath) - 5), "/dataset.csv", sep = ""))
-my.file.rename(from = filePath,
+  my.file.rename(from = filePath,
                to = paste("./Completed/", substr(filePath, 1, nchar(filePath) - 5), "/", filePath, sep = ""))
+}
 
 
 print("R script ran successfully!")

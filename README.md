@@ -26,3 +26,8 @@ If target excel file name is not specified, the <u>first excel file (.xlsx)</u> 
 Run the following command to see help and arguments for the script.
 
 <pre><code>Rscript normality_test.R -h</code></pre>
+<hr>
+
+### **What does the script do?**
+
+The script will perform automated normality testing using shapiro wilk function in dplyr library. User can parse in an excel file (.xlsx) to run automation, if not specified, script will use the first excel file it encounters in the directory. For each unqiue athlete extracted from "Competitors 2019-2023" worksheet in the excel file parsed, the script will loop through and perform normality testing. The dataset order used will start from "Competitor 2023", followed by "Competitor 2022-2023" & finally "Competitor 2019-2023". If there is not enough data points or p-value is lesser than 0.05, the script will advance to the next dataset. 2 files will be outputted (shapiroTest.csv & dataset.csv). 1 containing the final overall dataset used for normality testing and a csv containing shapiro testing results [p-values, dataset used, total datapoints, datapoints used, remarks]. If -c [--compileOutput] argument is parsed, output will be automated to move into "Completed" folder located in the directory.
